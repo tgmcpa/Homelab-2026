@@ -1,0 +1,17 @@
+site_name: Homelab Operations Center
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: teal
+    accent: cyan
+nav:
+  - Home: index.md
+  - Inventory: 
+    - Hardware: inventory.md
+    - Network: network.md
+    - Container Registry: registry.md
+  - Project Roadmap: roadmap.md
+  - Planning:
+    - Backlog: backlog.md
+    - Acquisitions: acquisitions.md

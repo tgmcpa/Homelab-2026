@@ -1,0 +1,203 @@
+# Homelab Master State (Initial Baseline)
+
+## 1. Network Overview
+
+| Device | Hostname | IP | Role |
+|--------|----------|----|------|
+| Pi5 | `gatekeeper` | 10.0.0.10 | Primary entry point into lab |
+| Mini | `pve-mini` | 10.0.0.21 | Frontend, auth, reverse proxy node |
+| Z240 | `pve-z240` | 10.0.0.20 | Primary compute + media node |
+| iMac | `imac` | 10.0.0.22 | Proxmox node, currently idle |
+| NAS | DS1621+ | 10.0.0.30 | Primary storage |
+
+---
+
+## 2. Node: Pi5 (`gatekeeper`)
+
+### Hardware: Pi5 (gatekeeper)
+
+- CPU: 4× Cortex-A76 (ARM64)
+- RAM: 8 GB
+- Storage:
+  - 59 GB microSD (system)
+- Swap:
+  - 2 GB zram
+
+**OS:** Debian 13  
+**Role:** Primary entry point for entire lab  
+**Storage:** Local SD only  
+
+### Running Containers
+| Service | Image | Ports |
+|---------|-------|-------|
+| AdGuard Home | adguard/adguardhome | DNS :53, UI :3000 (host network) |
+| Dockge | louislam/dockge | :5001 |
+| Beszel | henrygd/beszel | :8090 |
+| Glances | nicolargo/glances | :61208 |
+| Docker Socket Proxy | tecnativa/docker-socket-proxy | :2375 |
+
+---
+
+## 3. Node: Mini (`pve-mini`)
+
+### Hardware: Mini (pve-mini)
+
+- CPU: Intel i5-4278U (2 cores / 4 threads)
+- RAM: 8 GB
+- Storage:
+  - 1 TB SATA SSD
+    - 96 GB root
+    - ~794 GB LVM thin pool (VM/LXC storage)
+- Swap: 7.6 GB
+
+**OS:** Proxmox (Debian 13)  
+**Role:** Primary authentication / traffic control / frontend  
+
+### LXC Containers
+| VMID | Name | Purpose |
+|------|------|---------|
+| 105 | docker-core | Frontend + auth stack |
+
+### Containers inside LXC 105
+| Service | Purpose | Ports |
+|---------|---------|-------|
+| Traefik | Reverse proxy | :80, :443, :8080 |
+| Authentik | Authentication | :9000, :9443 |
+| Homepage | Dashboard | :3000 |
+| Dockge | Stack management | :5001 |
+| Whoami | Test container | internal |
+
+### Storage Mounts
+Mounted NAS shares under `/mnt/nas/*`
+
+---
+
+## 4. Node: Z240 (`pve-z240`)
+
+### Hardware: Z240 (pve-z240)
+
+- CPU: Intel i5-7500 (4 cores / 4 threads)
+- RAM: 32 GB
+- Storage:
+  - 1 TB NVMe
+    - 112 GB root
+    - ~794 GB LVM thin pool
+    - 200 GB dedicated to /opt/stacks
+  - 8 TB HDD (bulk storage)
+- Swap: 8 GB
+- GPU: NVIDIA T1000 8GB (TU117GL)
+- TPU: Dual Google Coral USB accelerators (attached)
+
+**OS:** Proxmox (Debian 13)  
+**Role:** Heavy lifter – compute / media / graphics  
+
+### LXC Containers
+| VMID | Name | Purpose |
+|------|------|---------|
+| 100 | docker-compute | Media + core services |
+
+### Containers inside LXC 100
+| Service | Purpose | Ports |
+|---------|---------|-------|
+| Plex | Media server | Host network |
+| Overseerr | Media requests | :5055 |
+| Radarr | Movie management | :7878 |
+| Sonarr | TV management | :8989 |
+| Vaultwarden | Password manager | :11001 |
+| Dockge | Stack management | :5001 |
+| Glances | Monitoring | :61208 |
+| Docker Socket Proxy | Docker API proxy | :2375 |
+
+### Storage
+- Local ZFS pool: `tank`
+- NAS shares mounted under `/mnt/nas/*`
+- Docker stacks stored under `/opt/stacks`
+
+---
+
+## 5. Node: iMac (`imac`)
+
+### Hardware: iMac (imac)
+
+- CPU: Intel i5-4570 (4 cores / 4 threads)
+- RAM: 32 GB
+- Storage:
+  - 1 TB SSD
+    - 96 GB root
+    - ~794 GB LVM thin pool
+  - 60 GB secondary disk (unused/legacy)
+- Swap: 8 GB
+
+**OS:** Proxmox (Debian 13)  
+**Role:** Idle compute node  
+**Current Workloads:** None
+
+---
+
+## 6. NAS: Synology DS1621+
+
+### Hardware: Synology DS1621+
+
+- CPU: AMD Ryzen V1500B (4 cores)
+- RAM: 32 GB
+- Drive Bays:
+  - 12 TB HDD
+  - 18 TB HDD
+  - 8 TB HDD
+  - 12 TB HDD
+  - 16 TB HDD
+  - 18 TB HDD
+- M.2 Cache:
+  - 2× Samsung 970 EVO Plus 500 GB (degraded / critical status)
+
+**IP:** 10.0.0.30  
+**Role:** Primary storage  
+**DSM:** 7.3.2  
+**CPU:** Ryzen V1500B  
+**RAM:** 32 GB  
+
+### Active Containers
+| Service | Purpose |
+|---------|---------|
+| sabnzbd | Usenet downloads |
+| transmission-openvpn | Torrent client |
+| watchtower | Container auto-updates |
+| glances | Monitoring |
+
+### Data Hosted
+- Media libraries (Movies, TV)
+- Plex metadata (legacy)
+- Photos
+- Books
+- Music
+- General storage shares
+
+---
+
+## 7. Service Distribution Summary
+
+| Function | Location |
+|----------|----------|
+| Reverse Proxy | Mini (Traefik) |
+| Authentication | Mini (Authentik) |
+| Dashboard | Mini (Homepage) |
+| Media Server | Z240 (Plex) |
+| Media Automation | Z240 (Radarr, Sonarr, Overseerr) |
+| DNS / Ad Blocking | Pi5 (AdGuard) |
+| Monitoring | Pi5 + Z240 + NAS (Glances/Beszel) |
+| Primary Storage | NAS |
+
+---
+
+## 8. Known Architecture Notes
+
+- Pi5 is the **network entry point**
+- Mini handles **frontend + identity + routing**
+- Z240 handles **heavy services and media workloads**
+- iMac is **available capacity**
+- NAS is **data gravity center**
+- Multiple Dockge instances currently exist
+
+---
+
+**END OF BASELINE STATE**
