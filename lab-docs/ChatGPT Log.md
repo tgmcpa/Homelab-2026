@@ -298,3 +298,111 @@ environment:
   REDIS_ROOT_KEY: traefik
   CONSTRAINTS: "Label(`traefik.enable`,`true`)"
   BIND_IP: <THIS_NODE_LAN_IP>   # e.g. 10.0.0.246
+
+## 📅 Homelab Progress Log — 2026-02-04 (Control Plane Stable + Terminal Safety)
+
+### 🎯 Session Goals
+- Stabilize Traefik cross-host routing
+- Establish repeatable KOP configuration pattern
+- Improve terminal safety to prevent running commands on the wrong machine
+- Begin preparation for Vaultwarden recovery
+
+---
+
+### 🌐 Traefik + Traefik-KOP Status
+
+**First successful cross-host routed service: Vaultwarden**
+
+- Active router: `vaultwarden@redis`
+- Service target: `http://10.0.0.246:11001`
+- Access verified at: `https://vaultwarden.tgmcpa.net`
+
+**Key architectural correction discovered:**
+
+Traefik-KOP was publishing container bridge IPs (`172.x.x.x`), which are unreachable from Traefik running on another host.  
+The fix was configuring KOP to publish the **node LAN IP**.
+
+#### ✅ Required KOP setting for multi-host routing
+
+Each `traefik-kop` instance must include:
+
+```yaml
+environment:
+  BIND_IP: <NODE_LAN_IP>
+
+---
+
+### 🖥 Terminal Safety System Deployed
+
+Custom shell safety banners installed on:
+
+| Host | Banner Color | Status |
+|------|--------------|--------|
+| Z240 | Red | Active |
+| Mini | Blue | Active |
+| iMac | Purple | Active |
+| Pi5 (gatekeeper) | Green | Active |
+
+Each terminal session now displays:
+
+- A large color-coded host banner  
+- Hostname  
+- Primary IP address  
+- Virtualization type (host / LXC)  
+- Environment tag (LAB)  
+- Color-matched command prompt  
+- Host-specific window title  
+
+This significantly reduces the risk of executing commands on the wrong machine and improves situational awareness when switching between nodes.
+
+
+2. **Reset only the Vaultwarden database**
+- Removed `db.sqlite3*`
+- Preserved attachments and RSA encryption keys
+
+3. **Restarted Vaultwarden as a fresh server instance**
+
+4. **Created new self-hosted account**
+- Same email as Bitwarden cloud
+- Known, current master password
+
+5. **Exported vault from Bitwarden cloud**
+
+6. **Imported vault into self-hosted Vaultwarden**
+
+Result: Full vault restored under a working master password.
+
+---
+
+### 🌐 Re-Integration Into Infrastructure
+
+Vaultwarden container was recreated with proper labels for automation:
+
+#### 🔀 Traefik Labels
+- Enables automatic HTTPS routing
+- Uses Cloudflare DNS challenge
+- Publishes service internally on port 80
+
+#### 🏠 Homepage Labels
+- Adds Vaultwarden tile under **Security** group
+- Icon: Bitwarden
+- Direct link to hosted instance
+
+Container run configuration:
+
+```bash
+docker run -d --name vaultwarden --restart unless-stopped --privileged \
+-p 11001:80 \
+-v /mnt/nas/docker/vaultwarden:/data \
+-l "traefik.enable=true" \
+-l "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.tgmcpa.net`)" \
+-l "traefik.http.routers.vaultwarden.entrypoints=websecure" \
+-l "traefik.http.routers.vaultwarden.tls.certresolver=cloudflare" \
+-l "traefik.http.services.vaultwarden.loadbalancer.server.port=80" \
+-l "homepage.group=Security" \
+-l "homepage.name=Vaultwarden" \
+-l "homepage.icon=bitwarden" \
+-l "homepage.href=https://vaultwarden.tgmcpa.net" \
+-l "homepage.description=Password Manager" \
+vaultwarden/server:latest
+
