@@ -406,3 +406,55 @@ docker run -d --name vaultwarden --restart unless-stopped --privileged \
 -l "homepage.description=Password Manager" \
 vaultwarden/server:latest
 
+## 📅 Homelab Progress Log — 2026-02-06
+### Focus: Linkwarden Migration + Control Plane Stability
+
+### ✅ Completed
+
+#### Linkwarden
+- Successfully exported Linkwarden data from DS1621+ via UI
+- Deployed **fresh Linkwarden stack** on Z240 (CT 100 / docker-compute)
+- PostgreSQL backend re-created cleanly (no NAS bind mounts)
+- Import completed successfully — all links verified present
+- Authentication fixed by aligning `NEXTAUTH_URL`
+- Admin account created (first user)
+- Service confirmed healthy
+
+#### Traefik
+- Labels added for Linkwarden
+- Router confirmed via Traefik API (`linkwarden@redis`)
+- Fixed 404 by adding:
+  - `tls.certresolver=cloudflare`
+  - `tls.options=default`
+- Linkwarden reachable at:
+  - https://linkwarden.tgmcpa.net
+
+#### Homepage
+- Homepage labels added to Linkwarden container
+- Service appears under Knowledge group
+
+#### Plex (Regression Fix)
+- Plex became unhealthy after LXC privilege changes
+- Root cause: stale UID/GID ownership on `/opt/stacks/plex/config`
+- Fixed by chown to `1000:1000`
+- Plex confirmed healthy and reachable
+- Active users unaffected after fix
+
+### 🧠 Key Architecture Decisions
+- CT 100 switched to **privileged LXC**
+- Avoided bindfs / NAS-backed DBs for app state
+- Standardized: local Postgres + Docker volumes
+- Traefik/KOP + Redis remains control-plane source of truth
+
+### 📍 Current State
+- Linkwarden: DONE
+- Traefik routing: VERIFIED
+- Plex: HEALTHY
+- System stable
+
+### ➡️ Next Steps
+- Start **Paperless-ngx** migration
+- Follow same pattern:
+  - Fresh stack on Z240
+  - Import from NAS export
+  - Traefik + Homepage labels
