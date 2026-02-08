@@ -458,3 +458,96 @@ vaultwarden/server:latest
   - Fresh stack on Z240
   - Import from NAS export
   - Traefik + Homepage labels
+
+## 📅 Homelab Progress Log — 2026-02-07
+
+### ✅ Paperless-ngx — RESOLVED
+
+- Container: `paperless` (LXC 100 / docker-compute)
+- Root cause: invalid env var format
+  - `PAPERLESS_PROXY_SSL_HEADER` was set as a plain string
+  - Paperless expects JSON and crashes during Django settings load
+- Fix applied in `/opt/stacks/paperlessngx/compose.yml`:
+  ```yaml
+  PAPERLESS_PROXY_SSL_HEADER: '["X-Forwarded-Proto", "https"]'
+  ```
+- Result:
+  - Container initializes successfully
+  - Healthcheck passes
+  - Web server binds to `:8000`
+  - Traefik-KOP publishes router
+  - Route visible in Traefik dashboard as `paperless@redis`
+  - HTTPS access via `https://paperless.tgmcpa.net` works
+  - Login restored
+
+### 🔀 Traefik / KOP / Redis — CONFIRMED HEALTHY
+
+- `traefik-kop`:
+  - Connected to Docker socket proxy
+  - Publishing services correctly
+  - Writing to Redis under `traefik:*`
+- Redis:
+  - DB0 in use
+  - Keys present for:
+    - linkwarden
+    - vaultwarden
+    - paperless
+- Traefik:
+  - Router visible:
+    - `paperless@redis`
+    - EntryPoint: `websecure`
+    - CertResolver: `cloudflare`
+    - Rule: `Host(paperless.tgmcpa.net)`
+
+### 🧠 Key takeaway
+
+Routing was never the problem.
+Paperless was unhealthy → KOP had nothing valid to publish.
+Once the container stayed up, everything else “just worked”.
+
+🕒 Nightly Git Autopush Job — Homelab Documentation
+
+Purpose:
+Automatically commits and pushes homelab documentation (session logs, canonical docs, and notes) to Git every night.
+
+Schedule:
+- Runs daily at 02:15 AM local time
+- Cron expression:
+  15 2 * * *
+
+Execution Context:
+- Host: pve-z240
+- User: tom (user crontab, not root)
+- Cron entry:
+  15 2 * * * /home/tom/git-autopush-projects.sh >/tmp/git-autopush-projects.log 2>&1
+
+Paths:
+- Script location:
+  /home/tom/git-autopush-projects.sh
+
+- Repository location (mounted into docker-compute / CT 100):
+  /mnt/nas/Tom/Projects/lab-docs
+
+- Log file:
+  /tmp/git-autopush-projects.log
+
+Discovery Notes:
+This job was initially difficult to locate because:
+- No root crontab entry exists
+- Nothing is defined in /etc/cron.d/
+- System-wide cron logging is not enabled
+- The repository lives on the NAS and is consumed by an LXC, but the cron job itself runs on the Z240 host
+
+Key rule:
+When automation appears to be missing, always check user crontabs on the host before looking elsewhere.
+
+Operational Policy:
+This cron job is the authoritative nightly backup mechanism for homelab documentation.
+
+Any change to:
+- schedule
+- script path
+- repository path
+- logging behavior
+
+must be documented here and committed to Git.
